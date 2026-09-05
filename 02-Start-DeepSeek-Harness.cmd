@@ -23,7 +23,7 @@ if errorlevel 1 (
     )
 )
 
-"%DSH_CMD%" web
+call "%DSH_CMD%" web
 
 echo.
 echo DeepSeek Harness has stopped.

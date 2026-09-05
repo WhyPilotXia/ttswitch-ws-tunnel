@@ -28,12 +28,12 @@ if errorlevel 1 (
 )
 
 echo Setting npm registry mirror...
-npm config set registry https://registry.npmmirror.com
+call npm config set registry https://registry.npmmirror.com
 if errorlevel 1 goto fail
 
 echo.
 echo Installing @deepseek-ai/dsh...
-npm install -g @deepseek-ai/dsh --verbose
+call npm install -g @deepseek-ai/dsh --verbose
 if errorlevel 1 goto fail
 
 call :FindDsh
@@ -41,7 +41,7 @@ if errorlevel 1 goto fail
 
 echo.
 echo Checking dsh...
-"%DSH_CMD%" --version
+call "%DSH_CMD%" --version
 if errorlevel 1 goto fail
 
 if not exist "%INJECT%" (
