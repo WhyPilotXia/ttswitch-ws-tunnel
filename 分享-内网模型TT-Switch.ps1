@@ -65,9 +65,18 @@ function Invoke-DshRpc {
             -UseBasicParsing
     } catch {
         Write-Host ""
-        Write-Host " 无法连接 $base" -ForegroundColor Red
-        Write-Host " 请确认 DeepSeek Harness Web 已在本机启动（默认 http://127.0.0.1:$Port），" -ForegroundColor Yellow
-        Write-Host " 并用 -Port 指定正确端口后重试。" -ForegroundColor Yellow
+        $status = $null
+        try { $status = [int]$_.Exception.Response.StatusCode } catch {}
+        if ($status -eq 401) {
+            Write-Host " 已连上 $base，但返回 401 未经授权。" -ForegroundColor Red
+            Write-Host " 这台机器的 dsh 是 0.1.2+ 新版：Web API 需要浏览器 token 登录，脚本无法直连。" -ForegroundColor Yellow
+            Write-Host " 修复：重新运行 01-Install-DeepSeek-Harness.cmd（自动降级到 0.1.1-rc.2 并重启 Web），" -ForegroundColor Yellow
+            Write-Host " 然后再运行本脚本。" -ForegroundColor Yellow
+        } else {
+            Write-Host " 无法连接 $base" -ForegroundColor Red
+            Write-Host " 请先运行 02-Start-DeepSeek-Harness.cmd 启动 DeepSeek Harness Web，" -ForegroundColor Yellow
+            Write-Host " 若端口不是 $Port，请用 -Port 指定正确端口后重试。" -ForegroundColor Yellow
+        }
         Write-Host " 详情：$($_.Exception.Message)" -ForegroundColor DarkGray
         exit 1
     }

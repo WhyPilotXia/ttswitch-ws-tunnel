@@ -32,8 +32,11 @@ call npm config set registry https://registry.npmmirror.com
 if errorlevel 1 goto fail
 
 echo.
-echo Installing @deepseek-ai/dsh...
-call npm install -g @deepseek-ai/dsh --verbose
+echo Removing any previous dsh (0.1.2+ adds a Web login that blocks scripted setup)...
+call npm uninstall -g @deepseek-ai/dsh >nul 2>nul
+
+echo Installing @deepseek-ai/dsh 0.1.1-rc.2 - last version without Web login...
+call npm install -g @deepseek-ai/dsh@0.1.1-rc.2 --verbose
 if errorlevel 1 goto fail
 
 call :FindDsh
@@ -56,16 +59,15 @@ if not exist "%INJECT%" (
 )
 
 echo.
-echo Starting DeepSeek Harness Web for first-time model setup...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 '%BASE%'; if ($r.StatusCode -ge 200) { exit 0 } } catch {}; exit 1"
-if errorlevel 1 (
-    start "DeepSeek Harness Web" cmd /k ""%DSH_CMD%" web --no-open --port %PORT%"
-) else (
-    echo DeepSeek Harness Web is already running.
-)
+echo Stopping any old Web process on port %PORT% - it may be the wrong dsh version...
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":%PORT% " ^| findstr "LISTENING"') do taskkill /f /t /pid %%a >nul 2>nul
+ping -n 3 127.0.0.1 >nul
 
-echo Waiting for Web service...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$deadline = (Get-Date).AddSeconds(90); do { try { $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 '%BASE%'; if ($r.StatusCode -ge 200) { exit 0 } } catch {}; Start-Sleep -Seconds 2 } until ((Get-Date) -gt $deadline); exit 1"
+echo Starting DeepSeek Harness Web for first-time model setup...
+start "DeepSeek Harness Web" cmd /k ""%DSH_CMD%" web --no-open --port %PORT%"
+
+echo Waiting for Web service... any HTTP answer counts as ready.
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$deadline = (Get-Date).AddSeconds(90); do { try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 '%BASE%' | Out-Null; exit 0 } catch { if ($_.Exception.Response) { exit 0 } }; Start-Sleep -Seconds 2 } until ((Get-Date) -gt $deadline); exit 1"
 if errorlevel 1 (
     echo.
     echo Web service did not start within 90 seconds.
