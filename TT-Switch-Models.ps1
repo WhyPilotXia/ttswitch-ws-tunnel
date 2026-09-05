@@ -7,8 +7,22 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# 兜底：未设置环境变量时，自动读取脚本同目录 .env.txt 中的 TT_TOKEN=
+# （优先级：-ApiKey / 环境变量 TT_TOKEN > .env.txt；复制整个文件夹分发时无需任何手动输入）
 if ([string]::IsNullOrWhiteSpace($ApiKey)) {
-    Write-Host "缺少 TT Switch token：请先设置环境变量 TT_TOKEN（或用 -ApiKey 传入）" -ForegroundColor Red
+    $envFile = Join-Path $PSScriptRoot ".env.txt"
+    if (Test-Path -LiteralPath $envFile) {
+        foreach ($line in Get-Content -LiteralPath $envFile -Encoding UTF8) {
+            if ($line -match '^\s*TT_TOKEN\s*=\s*(\S+)') {
+                $ApiKey = $Matches[1]
+                break
+            }
+        }
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($ApiKey)) {
+    Write-Host "缺少 TT Switch token：在脚本同目录 .env.txt 写入 TT_TOKEN=ttsw-...（或设置环境变量 TT_TOKEN / 用 -ApiKey 传入）" -ForegroundColor Red
     exit 1
 }
 $base = "http://127.0.0.1:$Port/api"
