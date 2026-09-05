@@ -29,80 +29,106 @@ llm-pi-ai:
         # off 发送空（不携带 reasoning_effort 参数），其余按原值上送。
         # -1m 后缀的 Claude 变体声明 contextWindow=1,000,000；
         # 其余模型容量走路由默认 defaultContextWindow=262144 / defaultMaxTokens=32768（网关实测接受）。
+        # 多模态模型声明 input: [text, image]（共 28 个：Claude/GPT/Gemini/GLM/Kimi 全系 +
+        # DeepSeek V4 Flash/Pro）；MiniMax M3/M2.7、Hunyuan 3 暂按纯文本。声明决定 Harness
+        # 入口放行图片；最终能否识图仍取决于网关/上游对该模型的多模态支持。
         # --- 公费（无 -ioa 后缀） ---
         - id: claude-sonnet-5
+          input: [text, image]
           name: Claude Sonnet 5（公费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: claude-sonnet-5-1m
+          input: [text, image]
           name: Claude Sonnet 5 (1M)（公费）
           contextWindow: 1000000
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: claude-sonnet-4.6
+          input: [text, image]
           name: Claude Sonnet 4.6（公费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: claude-sonnet-4.6-1m
+          input: [text, image]
           name: Claude Sonnet 4.6 (1M)（公费）
           contextWindow: 1000000
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: claude-opus-5
+          input: [text, image]
           name: Claude Opus 5（公费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: claude-opus-4.8
+          input: [text, image]
           name: Claude Opus 4.8（公费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: claude-opus-4.8-1m
+          input: [text, image]
           name: Claude Opus 4.8 (1M)（公费）
           contextWindow: 1000000
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: claude-opus-4.7
+          input: [text, image]
           name: Claude Opus 4.7（公费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: claude-opus-4.7-1m
+          input: [text, image]
           name: Claude Opus 4.7 (1M)（公费）
           contextWindow: 1000000
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: claude-opus-4.6
+          input: [text, image]
           name: Claude Opus 4.6（公费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: claude-opus-4.6-1m
+          input: [text, image]
           name: Claude Opus 4.6 (1M)（公费）
           contextWindow: 1000000
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: gemini-3.1-pro
+          input: [text, image]
           name: Gemini 3.1 Pro（公费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: gemini-3.5-flash
+          input: [text, image]
           name: Gemini 3.5 Flash（公费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: gpt-5.6-sol
+          input: [text, image]
           name: GPT-5.6 Sol（公费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: gpt-5.6-terra
+          input: [text, image]
           name: GPT-5.6 Terra（公费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: gpt-5.6-luna
+          input: [text, image]
           name: GPT-5.6 Luna（公费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: gpt-5.5
+          input: [text, image]
           name: GPT-5.5（公费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: gpt-5.4
+          input: [text, image]
           name: GPT-5.4（公费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: gpt-5.3-codex
+          input: [text, image]
           name: GPT-5.3 Codex（公费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         # --- 免费（-ioa 后缀） ---
         - id: glm-5.3-ioa
+          input: [text, image]
           name: GLM 5.3（内网·免费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: glm-5.2-ioa
+          input: [text, image]
           name: GLM 5.2（内网·免费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: glm-5.2-internal-ioa
+          input: [text, image]
           name: GLM 5.2 Internal（内网·免费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: glm-5v-turbo-ioa
+          input: [text, image]
           name: GLM-5V Turbo（内网·免费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: minimax-m3-ioa
@@ -112,20 +138,25 @@ llm-pi-ai:
           name: MiniMax M2.7（内网·免费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: kimi-k3-ioa
+          input: [text, image]
           name: Kimi K3（内网·免费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: kimi-k2.7-ioa
+          input: [text, image]
           name: Kimi K2.7（内网·免费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: kimi-k2.6-ioa
+          input: [text, image]
           name: Kimi K2.6（内网·免费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: hy3-ioa
           name: Hunyuan 3（内网·免费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: deepseek-v4-flash-ioa
+          input: [text, image]
           name: DeepSeek V4 Flash（内网·免费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }
         - id: deepseek-v4-pro-ioa
+          input: [text, image]
           name: DeepSeek V4 Pro（内网·免费）
           reasoningEfforts: { off: null, minimal: minimal, low: low, medium: medium, high: high }

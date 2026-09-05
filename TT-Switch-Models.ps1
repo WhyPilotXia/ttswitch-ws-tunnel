@@ -1,4 +1,4 @@
-param(
+﻿param(
     [int]$Port = 3080,
     # 令牌不写入脚本：默认读环境变量 TT_TOKEN，也可用 -ApiKey 显式传入
     [string]$ApiKey = $env:TT_TOKEN,
@@ -119,6 +119,20 @@ $modelIds = @(
 
 $efforts = @{ off = $null; minimal = "minimal"; low = "low"; medium = "medium"; high = "high" }
 
+# 多模态模型：声明 input = [text, image]（Harness 入口按此声明放行图片输入）。
+# 未列出的模型（MiniMax M3/M2.7、Hunyuan 3）保持默认仅文本。
+# 注意：这只是 Harness 入口的能力声明，网关/上游也需真正支持该模型的图片输入。
+$imageInputModels = @(
+    "claude-sonnet-5", "claude-sonnet-5-1m", "claude-sonnet-4.6", "claude-sonnet-4.6-1m",
+    "claude-opus-5", "claude-opus-4.8", "claude-opus-4.8-1m", "claude-opus-4.7",
+    "claude-opus-4.7-1m", "claude-opus-4.6", "claude-opus-4.6-1m",
+    "gemini-3.1-pro", "gemini-3.5-flash",
+    "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.4", "gpt-5.3-codex",
+    "glm-5.3-ioa", "glm-5.2-ioa", "glm-5.2-internal-ioa", "glm-5v-turbo-ioa",
+    "kimi-k3-ioa", "kimi-k2.7-ioa", "kimi-k2.6-ioa",
+    "deepseek-v4-flash-ioa", "deepseek-v4-pro-ioa"
+)
+
 $models = foreach ($id in $modelIds) {
     $entry = @{
         id               = $id
@@ -126,6 +140,7 @@ $models = foreach ($id in $modelIds) {
         reasoningEfforts = $efforts
     }
     if ($id -like "*-1m") { $entry.contextWindow = 1000000 }
+    if ($imageInputModels -contains $id) { $entry.input = @("text", "image") }
     , $entry
 }
 
