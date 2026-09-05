@@ -1,0 +1,6 @@
+.DS_Store
+__pycache__/
+*.pyc
+
+# 真实环境变量配置（含令牌与内网 IP），模板见 .env.txt.example
+.env.txt
