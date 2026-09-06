@@ -31,6 +31,14 @@
 - `.env.txt`：环境变量配置——`IP=` 供内网 Agent 读取，`TT_TOKEN=` 供外网 demo 读取；真实文件已被 `.gitignore` 排除，模板见 `.env.txt.example`。
 - `requirements.txt`：两端共用依赖。
 
+所有运行日志均带本地时间前缀，格式 `[YYYY-MM-DD HH:MM:SS]`，例如：
+
+```text
+[2026-09-06 12:38:31] 外网请求：IP=1.2.3.4 POST /tencent/v1/chat/completions 请求ID=…
+[2026-09-06 12:38:31] 模型：glm-5.3-ioa
+[2026-09-06 12:39:02] 请求结束：IP=1.2.3.4 请求ID=… 状态=200 响应=… 耗时=30.5秒 结果=完成
+```
+
 ## 1. 核对共享密钥
 
 两个 Python 文件顶部的 `TUNNEL_SECRET` 必须完全一致，并且至少 32 个字符。首次部署前建议自行重新生成：
@@ -58,6 +66,15 @@ curl http://127.0.0.1:18443/__tunnel_health
 ```
 
 Agent 尚未连接时，状态是 `waiting_for_agent`。
+
+Windows Server 更新版本（假设脚本在 `C:\ttswitch-ws-tunnel`，管理员 PowerShell）：
+
+```powershell
+cd C:\ttswitch-ws-tunnel
+curl.exe -L -o public_relay.py https://raw.githubusercontent.com/WhyPilotXia/ttswitch-ws-tunnel/main/public_relay.py
+taskkill /F /IM python.exe        # 停旧进程（确认没有别的 python 在跑重要任务）
+python public_relay.py
+```
 
 ## 3. 内网服务器
 
@@ -146,18 +163,28 @@ http://118.31.105.6:18443/tencent/v1
    `public_relay.py`。
 2. **混合内容**：GitHub Pages 是 HTTPS，浏览器禁止调用 `http://` 网关。**无域名解法**——
    sslip.io 免费把 `118-31-105-6.sslip.io` 解析到 `118.31.105.6`（IP 嵌在域名里，无需购买），
-   再用 Let's Encrypt 免费签证书：
-   ```bash
-   # 公网服务器上（需临时空出 80 端口）
-   sudo certbot certonly --standalone -d 118-31-105-6.sslip.io
+   用 Let's Encrypt 免费签证书。**Windows Server 用 win-acme**（certbot 官方已停发 Windows 安装包）：
+   ```powershell
+   # 管理员 PowerShell（临时停掉占用 80 端口的服务，验证完再启）
+   curl.exe -L -o win-acme.zip https://github.com/win-acme/win-acme/releases/download/v2.2.9.1701/win-acme.v2.2.9.1701.x64.trimmed.zip
+   Expand-Archive win-acme.zip -DestinationPath C:\win-acme
+   C:\win-acme\wacs.exe --source manual --host 118-31-105-6.sslip.io --validation selfhosting `
+     --store pemfiles --pemfilespath C:\ttswitch-ws-tunnel\certs `
+     --installation none --accepttos --emailaddress you@example.com
    ```
-   然后把 `public_relay.py` 的 `SSL_CERT_FILE` / `SSL_KEY_FILE` 指向
-   `/etc/letsencrypt/live/118-31-105-6.sslip.io/` 下的 `fullchain.pem` / `privkey.pem` 并重启；
-   `intranet_agent.py` 的 `PUBLIC_TUNNEL_URL` 改为
-   `wss://118-31-105-6.sslip.io:18443/_tunnel`；页面设置中 Base URL 改为
+   完成后 `C:\ttswitch-ws-tunnel\certs\` 下生成 `*-crt.pem`（证书）、`*-key.pem`（私钥）、
+   `*-chain.pem`（证书+中间链）。在 `public_relay.py` 填写并重启：
+   ```python
+   SSL_CERT_FILE = r"C:\ttswitch-ws-tunnel\certs\118-31-105-6.sslip.io-chain.pem"
+   SSL_KEY_FILE = r"C:\ttswitch-ws-tunnel\certs\118-31-105-6.sslip.io-key.pem"
+   ```
+   然后 Mac 侧 `.env.txt` 加一行 `PUBLIC_TUNNEL_URL=wss://118-31-105-6.sslip.io:18443/_tunnel`
+   并重启 `intranet_agent.py`；页面设置中 Base URL 改为
    `https://118-31-105-6.sslip.io:18443/tencent/v1`。
-   证书 90 天有效，`certbot renew` + 重启中继即可续期。若 sslip.io 撞上 Let's Encrypt
-   公共域名周限额（与全网用户共享 50 张/周，偶发），换 nip.io 域名重签，或用
-   ZeroSSL（`acme.sh --server zerossl`）。
+   win-acme 自动创建计划任务续期（证书 90 天有效）；由于 Python 进程启动时加载证书，
+   续期后需重启 `public_relay.py`（可加一个计划任务执行
+   `taskkill /F /IM python.exe & python public_relay.py` 或用 NSSM 注册为服务）。
+   若 sslip.io 撞上 Let's Encrypt 公共域名周限额（与全网用户共享 50 张/周，偶发），换 nip.io
+   域名（`118-31-105-6.nip.io`）重签，或给 wacs.exe 加 `--baseuri` 切 ZeroSSL。
 3. **零改动兜底**：页面横幅提供「下载本页」，本地双击打开（`file://` 不受混合内容限制，
    CORS `*` 覆盖 `Origin: null`），功能完全一致。

@@ -11,6 +11,7 @@ import ssl
 import time
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Iterable
 
 from aiohttp import WSMsgType, web
@@ -68,6 +69,11 @@ HOP_BY_HOP_HEADERS = {
     "transfer-encoding",
     "upgrade",
 }
+
+
+def log(message: str) -> None:
+    """带本地时间前缀输出日志，便于按请求发生时间排查问题。"""
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}")
 
 
 class TunnelUnavailable(Exception):
@@ -360,16 +366,16 @@ def log_request_body(body: bytes, truncated: bool) -> None:
     try:
         payload = json.loads(body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
-        print(f"请求体：无法解析为完整 UTF-8 JSON{suffix}", flush=True)
+        log(f"请求体：无法解析为完整 UTF-8 JSON{suffix}")
         return
 
     if not isinstance(payload, dict):
-        print(f"请求体：JSON 类型为 {type(payload).__name__}{suffix}", flush=True)
+        log(f"请求体：JSON 类型为 {type(payload).__name__}{suffix}")
         return
 
     model = payload.get("model")
     if model is not None:
-        print(f"模型：{model}", flush=True)
+        log(f"模型：{model}")
 
     messages = payload.get("messages")
     if isinstance(messages, list):
@@ -382,16 +388,16 @@ def log_request_body(body: bytes, truncated: bool) -> None:
                 continue
             found = True
             text = clipped_text(content_text(message.get("content", "")))
-            print(f"提示词[{role}]：{text}", flush=True)
+            log(f"提示词[{role}]：{text}")
         if not found:
-            print("提示词：messages 中没有可显示的输入消息", flush=True)
+            log("提示词：messages 中没有可显示的输入消息")
         return
 
     prompt = payload.get("prompt", payload.get("input"))
     if prompt is not None:
-        print(f"提示词：{clipped_text(content_text(prompt))}", flush=True)
+        log(f"提示词：{clipped_text(content_text(prompt))}")
     elif model is None:
-        print(f"请求体：JSON 未包含 model/messages/prompt/input{suffix}", flush=True)
+        log(f"请求体：JSON 未包含 model/messages/prompt/input{suffix}")
 
 
 async def authenticate_agent(ws: web.WebSocketResponse) -> SecureChannel:
@@ -517,7 +523,7 @@ async def tunnel_handler(request: web.Request) -> web.StreamResponse:
             await ws.close(code=1013, message=b"agent already connected")
             return ws
 
-        print(f"[tunnel] 加密 Agent 已连接：{peer}", flush=True)
+        log(f"[tunnel] 加密 Agent 已连接：{peer}")
         async for message in ws:
             if message.type == WSMsgType.BINARY:
                 await handle_agent_frame(state, ws, message.data)
@@ -526,17 +532,17 @@ async def tunnel_handler(request: web.Request) -> web.StreamResponse:
             elif message.type == WSMsgType.ERROR:
                 raise ws.exception() or TunnelUnavailable("WebSocket 异常")
     except asyncio.TimeoutError:
-        print(f"[tunnel] Agent 认证超时：{peer}", flush=True)
+        log(f"[tunnel] Agent 认证超时：{peer}")
         await ws.close(code=1008, message=b"authentication timeout")
     except ProtocolError as exc:
-        print(f"[tunnel] 协议或认证错误：{peer}：{exc}", flush=True)
+        log(f"[tunnel] 协议或认证错误：{peer}：{exc}")
         await ws.close(code=1008, message=b"protocol or authentication error")
     except Exception as exc:
-        print(f"[tunnel] Agent 连接异常：{peer}：{exc}", flush=True)
+        log(f"[tunnel] Agent 连接异常：{peer}：{exc}")
     finally:
         if registered and await state.unregister(ws):
             await state.fail_all("内网 Agent 已断开")
-            print(f"[tunnel] 加密 Agent 已离线：{peer}", flush=True)
+            log(f"[tunnel] 加密 Agent 已离线：{peer}")
 
     return ws
 
@@ -559,20 +565,18 @@ async def proxy_handler(request: web.Request) -> web.StreamResponse:
     peer = client_ip(request)
     started_at = time.monotonic()
     if REQUEST_LOG_ENABLED:
-        print(
+        log(
             f"外网请求：IP={peer} {request.method} {request.raw_path} "
             f"请求ID={request_id}",
-            flush=True,
         )
 
     state = get_state(request)
     agent = state.agent
     if agent is None or agent.closed:
         if REQUEST_LOG_ENABLED:
-            print(
+            log(
                 f"请求结束：IP={peer} 请求ID={request_id} 状态=503 "
                 f"耗时={time.monotonic() - started_at:.3f}秒，内网 Agent 未连接",
-                flush=True,
             )
         return json_error(503, "内网 Agent 未连接")
 
@@ -685,10 +689,9 @@ async def proxy_handler(request: web.Request) -> web.StreamResponse:
         raise
     except Exception as exc:
         result_detail = f"转发失败：{type(exc).__name__}: {exc}"
-        print(
+        log(
             f"转发失败：IP={peer} 请求ID={request_id} {request.method} "
             f"{request.raw_path}，{exc}",
-            flush=True,
         )
         if response is None:
             response_status = 502
@@ -711,11 +714,10 @@ async def proxy_handler(request: web.Request) -> web.StreamResponse:
         elif not pending.response_start.done():
             pending.response_start.cancel()
         if REQUEST_LOG_ENABLED:
-            print(
+            log(
                 f"请求结束：IP={peer} 请求ID={request_id} 状态={response_status} "
                 f"响应={response_bytes}字节 耗时={time.monotonic() - started_at:.3f}秒 "
                 f"结果={result_detail}",
-                flush=True,
             )
 
 
@@ -760,11 +762,10 @@ if __name__ == "__main__":
     ssl_context = build_ssl_context()
     scheme = "https" if ssl_context else "http"
     ws_scheme = "wss" if ssl_context else "ws"
-    print(f"[server] 外网 API：{scheme}://118.31.105.6:{LISTEN_PORT}/", flush=True)
-    print(
+    log(f"[server] 外网 API：{scheme}://118.31.105.6:{LISTEN_PORT}/")
+    log(
         f"[server] 加密 Agent 入口："
         f"{ws_scheme}://118.31.105.6:{LISTEN_PORT}{TUNNEL_PATH}",
-        flush=True,
     )
     web.run_app(
         create_app(),

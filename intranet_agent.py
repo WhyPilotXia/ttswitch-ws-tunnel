@@ -12,6 +12,7 @@ import re
 import ssl
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, AsyncIterator, Iterable
 
 import aiohttp
@@ -20,6 +21,11 @@ from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
+def log(message: str) -> None:
+    """带本地时间前缀输出日志，便于按请求发生时间排查问题。"""
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}")
+
 
 def _load_env_txt() -> dict:
     """读取脚本同目录 .env.txt，解析 KEY=VALUE 行（# 开头为注释）。"""
@@ -46,8 +52,14 @@ _ENV = _load_env_txt()
 LOCAL_TTSWITCH_IP = _ENV.get("IP", "10.34.105.48")
 LOCAL_TTSWITCH_PORT = 15721
 
-# 公网服务器没有 HTTPS 证书，所以先使用 ws://；隧道载荷会在应用层加密。
-PUBLIC_TUNNEL_URL = "ws://118.31.105.6:18443/_tunnel"
+# 公网隧道地址：优先读同目录 .env.txt 的 PUBLIC_TUNNEL_URL=xxx 或环境变量
+# （服务器启用 HTTPS 证书后改为 wss://118-31-105-6.sslip.io:18443/_tunnel），
+# 未配置时使用下面的内置默认值。隧道载荷会在应用层加密。
+PUBLIC_TUNNEL_URL = (
+    _ENV.get("PUBLIC_TUNNEL_URL")
+    or os.getenv("PUBLIC_TUNNEL_URL")
+    or "ws://118.31.105.6:18443/_tunnel"
+)
 
 # 必须与 public_relay.py 完全一致，建议至少 32 个随机字符。
 TUNNEL_SECRET = "ttunnel-FhCiE5K1gUAokBybTYCl5_m1f1jgx6ayT27yxWeFDbA"
@@ -405,7 +417,7 @@ class AgentTunnel:
                 f"无法连接 TT Switch：{LOCAL_TTSWITCH_IP}:{LOCAL_TTSWITCH_PORT}",
             )
         except Exception as exc:
-            print(f"[agent] 请求 {request_id} 转发失败：{exc}", flush=True)
+            log(f"[agent] 请求 {request_id} 转发失败：{exc}")
             await self.safe_error(request_id, f"内网请求失败：{type(exc).__name__}")
         finally:
             current = self.requests.get(request_id)
@@ -528,15 +540,13 @@ async def check_local_ttswitch() -> None:
         del reader
         writer.close()
         await writer.wait_closed()
-        print(
+        log(
             f"[agent] TT Switch 可连接：{LOCAL_TTSWITCH_IP}:{LOCAL_TTSWITCH_PORT}",
-            flush=True,
         )
     except Exception as exc:
-        print(
+        log(
             f"[agent] 警告：暂时无法连接 TT Switch "
             f"{LOCAL_TTSWITCH_IP}:{LOCAL_TTSWITCH_PORT}（{exc}）",
-            flush=True,
         )
 
 
@@ -551,9 +561,9 @@ def websocket_ssl_option() -> ssl.SSLContext | bool | None:
 async def main() -> None:
     validate_secret()
     if "IP" in _ENV:
-        print(f"[agent] 已从同目录 .env.txt 读取 IP={LOCAL_TTSWITCH_IP}", flush=True)
+        log(f"[agent] 已从同目录 .env.txt 读取 IP={LOCAL_TTSWITCH_IP}")
     else:
-        print(f"[agent] 未配置 .env.txt 的 IP，使用内置默认 IP={LOCAL_TTSWITCH_IP}", flush=True)
+        log(f"[agent] 未配置 .env.txt 的 IP，使用内置默认 IP={LOCAL_TTSWITCH_IP}")
     await check_local_ttswitch()
     timeout = aiohttp.ClientTimeout(
         total=None,
@@ -571,7 +581,7 @@ async def main() -> None:
     ) as session:
         while True:
             try:
-                print(f"[agent] 正在连接 {PUBLIC_TUNNEL_URL}", flush=True)
+                log(f"[agent] 正在连接 {PUBLIC_TUNNEL_URL}")
                 async with session.ws_connect(
                     PUBLIC_TUNNEL_URL,
                     heartbeat=WS_HEARTBEAT,
@@ -579,25 +589,24 @@ async def main() -> None:
                     ssl=websocket_ssl_option(),
                 ) as ws:
                     channel = await authenticate_server(ws)
-                    print(
+                    log(
                         "[agent] 反向隧道已建立，载荷已启用 ChaCha20-Poly1305 加密",
-                        flush=True,
                     )
                     delay = RECONNECT_MIN_DELAY
                     await AgentTunnel(ws, session, channel).run()
-                    print("[agent] 公网中继已断开", flush=True)
+                    log("[agent] 公网中继已断开")
             except asyncio.CancelledError:
                 raise
             except KeyboardInterrupt:
                 return
             except Exception as exc:
-                print(f"[agent] 连接失败：{exc}", flush=True)
+                log(f"[agent] 连接失败：{exc}")
 
             sleep_seconds = min(
                 RECONNECT_MAX_DELAY,
                 delay + random.uniform(0, max(0.2, delay * 0.2)),
             )
-            print(f"[agent] {sleep_seconds:.1f} 秒后重连", flush=True)
+            log(f"[agent] {sleep_seconds:.1f} 秒后重连")
             await asyncio.sleep(sleep_seconds)
             delay = min(RECONNECT_MAX_DELAY, delay * 2)
 
@@ -606,4 +615,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\n[agent] 已停止", flush=True)
+        log("\n[agent] 已停止")
