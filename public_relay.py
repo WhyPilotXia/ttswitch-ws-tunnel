@@ -293,12 +293,30 @@ def filtered_headers(
     return [[name, value] for name, value in source if name.lower() not in blocked]
 
 
+# ---------- CORS（GitHub Pages 等浏览器页面直连需要） ----------
+# 浏览器从 https://*.github.io 页面 fetch 本服务时受同源策略限制；
+# 对 API 响应统一附加宽松 CORS 头，并在中间件直接应答 OPTIONS 预检。
+# 凭据走 Authorization 头（不依赖 Cookie），因此 Allow-Origin: * 是安全的。
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept",
+    "Access-Control-Max-Age": "86400",
+}
+
+
+def apply_cors(response: web.StreamResponse) -> web.StreamResponse:
+    for name, value in CORS_HEADERS.items():
+        response.headers[name] = value
+    return response
+
+
 def json_error(status: int, message: str) -> web.Response:
-    return web.json_response(
+    return apply_cors(web.json_response(
         {"error": {"message": message, "type": "tunnel_error"}},
         status=status,
         dumps=lambda value: json.dumps(value, ensure_ascii=False),
-    )
+    ))
 
 
 def get_state(request: web.Request) -> RelayState:
@@ -525,7 +543,7 @@ async def tunnel_handler(request: web.Request) -> web.StreamResponse:
 
 async def health_handler(request: web.Request) -> web.Response:
     state = get_state(request)
-    return web.json_response(
+    return apply_cors(web.json_response(
         {
             "status": "ok" if state.connected() else "waiting_for_agent",
             "agent_connected": state.connected(),
@@ -533,7 +551,7 @@ async def health_handler(request: web.Request) -> web.Response:
             "listen_port": LISTEN_PORT,
             "tunnel_encryption": "ChaCha20-Poly1305",
         }
-    )
+    ))
 
 
 async def proxy_handler(request: web.Request) -> web.StreamResponse:
@@ -622,6 +640,7 @@ async def proxy_handler(request: web.Request) -> web.StreamResponse:
                 and "\n" not in header[1]
             ):
                 response.headers.add(header[0], header[1])
+        apply_cors(response)
 
         await response.prepare(request)
         while True:
@@ -717,9 +736,18 @@ def build_ssl_context() -> ssl.SSLContext | None:
     return context
 
 
+@web.middleware
+async def cors_options_middleware(request: web.Request, handler):
+    if request.method == "OPTIONS":
+        return web.Response(status=204, headers=CORS_HEADERS)
+    return await handler(request)
+
+
 def create_app() -> web.Application:
     validate_secret()
-    app = web.Application(client_max_size=MAX_REQUEST_SIZE)
+    app = web.Application(
+        client_max_size=MAX_REQUEST_SIZE, middlewares=[cors_options_middleware]
+    )
     app["relay_state"] = RelayState()
     app.router.add_route("*", TUNNEL_PATH, tunnel_handler)
     app.router.add_get("/__tunnel_health", health_handler)

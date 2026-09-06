@@ -125,3 +125,39 @@ http://118.31.105.6:18443/tencent/v1
 - `无法连接 TT Switch`：在内网服务器执行 `curl http://<本机IP>:15721/tencent/v1/models`，检查 Mac 防火墙和 TT Switch 监听地址。
 - 普通模型 API 返回 `401`：外网请求携带的 TT Switch Token 不正确，与隧道密钥无关。
 - 流式中途超时：默认允许响应连续静默 `600` 秒，可修改 `STREAM_IDLE_TIMEOUT`。
+
+## 在线演示（GitHub Pages）
+
+`docs/index.html` 是纯前端单页演示（仿 DeepSeek Harness 风格，零依赖、零构建）：
+
+- 模型选择（31 个内置清单，分组标「公费 / 内网·免费」，多模态带 📷）+ 推理等级
+- 流式对话（SSE），推理过程折叠展示；Markdown / 代码块渲染
+- 上传图片（多模态模型，OpenAI `image_url` 格式）、读取本地文本文件附加到消息
+- 设置抽屉配置 TT_TOKEN / Base URL / System Prompt / 上下文条数；令牌仅存浏览器 localStorage
+- 未配置令牌时页面顶部横幅提示（非弹窗）；30 秒一次隧道健康状态点
+
+发布：GitHub 仓库 → Settings → Pages → Deploy from a branch → `main` 分支 `/docs` 目录，
+访问 `https://whypilotxia.github.io/ttswitch-ws-tunnel/`。
+
+浏览器限制与解法：
+
+1. **CORS**：`public_relay.py` 已对 API 响应附加 CORS 头并直接应答 OPTIONS 预检
+   （`Allow-Origin: *`；令牌走 `Authorization` 头不依赖 Cookie，安全）。服务器更新后需重启
+   `public_relay.py`。
+2. **混合内容**：GitHub Pages 是 HTTPS，浏览器禁止调用 `http://` 网关。**无域名解法**——
+   sslip.io 免费把 `118-31-105-6.sslip.io` 解析到 `118.31.105.6`（IP 嵌在域名里，无需购买），
+   再用 Let's Encrypt 免费签证书：
+   ```bash
+   # 公网服务器上（需临时空出 80 端口）
+   sudo certbot certonly --standalone -d 118-31-105-6.sslip.io
+   ```
+   然后把 `public_relay.py` 的 `SSL_CERT_FILE` / `SSL_KEY_FILE` 指向
+   `/etc/letsencrypt/live/118-31-105-6.sslip.io/` 下的 `fullchain.pem` / `privkey.pem` 并重启；
+   `intranet_agent.py` 的 `PUBLIC_TUNNEL_URL` 改为
+   `wss://118-31-105-6.sslip.io:18443/_tunnel`；页面设置中 Base URL 改为
+   `https://118-31-105-6.sslip.io:18443/tencent/v1`。
+   证书 90 天有效，`certbot renew` + 重启中继即可续期。若 sslip.io 撞上 Let's Encrypt
+   公共域名周限额（与全网用户共享 50 张/周，偶发），换 nip.io 域名重签，或用
+   ZeroSSL（`acme.sh --server zerossl`）。
+3. **零改动兜底**：页面横幅提供「下载本页」，本地双击打开（`file://` 不受混合内容限制，
+   CORS `*` 覆盖 `Origin: null`），功能完全一致。
