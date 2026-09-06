@@ -108,7 +108,7 @@ details.reasoning .rbody{white-space:pre-wrap;margin-top:6px;word-break:break-wo
 </header>
 
 <div id="tokenBanner" class="banner">⚠️ 尚未配置 TT_TOKEN，模型调用会被拒绝（401）。<button id="tbGo">打开设置填写</button></div>
-<div id="mixedBanner" class="banner">🔒 HTTPS 页面无法调用 HTTP 网关（浏览器混合内容限制）。免域名解法：给服务器配 sslip.io 免费解析 + Let's Encrypt 免费证书（命令见仓库 README「在线演示」），再把设置里的地址改为 <b>https://118-31-105-6.sslip.io:18443/tencent/v1</b>；或 <button id="dlPage">⬇ 下载本页</button> 到本地双击打开（本地打开不受此限制）。</div>
+<div id="mixedBanner" class="banner">🔒 HTTPS 页面无法调用 HTTP 网关（浏览器混合内容限制）。推荐：直接使用服务器在线版 <a href="http://118.31.105.6:18443/">http://118.31.105.6:18443/</a>（与 API 同源，无此限制）；或 <button id="dlPage">⬇ 下载本页</button> 到本地双击打开。（服务器 80 端口被备案拦截，暂无法签发 HTTPS 证书，详见 README）</div>
 
 <div id="chat"><div class="wrap" id="list"><div class="empty"><div class="big">🛰️</div>选择模型后开始对话<br>支持上传图片（多模态模型）与读取文本文件</div></div></div>
 
@@ -537,6 +537,10 @@ function init(){
   for (const e of EFFORTS) { const o = document.createElement("option"); o.value = o.textContent = e; es.appendChild(o); }
   es.value = EFFORTS.includes(S.effort) ? S.effort : "off"; S.effort = es.value;
   if (!S.baseUrl) S.baseUrl = DEFAULT_BASE_URL;
+  // 首次访问且从中继服务器打开时（非 GitHub Pages / 非本地文件），自动使用同源 API 地址
+  if (!localStorage.getItem("ttplay.settings") && /^https?:$/.test(location.protocol) && !/(^|\.)github\.io$/.test(location.hostname)) {
+    S.baseUrl = location.origin + "/tencent/v1";
+  }
   buildModelSelect(); bind(); renderAll(); renderPending(); updateBanners();
   healthCheck(); setInterval(healthCheck, 30000);
   $("ta").focus();

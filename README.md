@@ -156,35 +156,46 @@ http://118.31.105.6:18443/tencent/v1
 发布：GitHub 仓库 → Settings → Pages → Deploy from a branch → `main` 分支 `/docs` 目录，
 访问 `https://whypilotxia.github.io/ttswitch-ws-tunnel/`。
 
-浏览器限制与解法：
+**推荐用法：服务器同源在线版（无需证书，不受备案拦截）**
+
+实测该阿里云服务器对未备案域名/IP 的 80 端口有备案拦截（Let's Encrypt HTTP-01 验证返回
+403），且 sslip.io 是公共解析服务、无法添加 TXT 记录（DNS-01 也不可行）。因此
+`public_relay.py` 已内置把 `docs/index.html` 挂在中继端口直接返回——页面与 API 同源同协议
+（`http://118.31.105.6:18443/`），无混合内容、无跨域限制，**完全不需要证书**（18443 为
+非标端口，不在备案拦截范围）：
+
+```powershell
+# 公网服务器上（C:\ttswitch-ws-tunnel 为仓库目录）
+git pull
+# Ctrl+C 停掉旧的 public_relay.py 进程后重新运行
+python public_relay.py
+```
+
+浏览器打开 `http://118.31.105.6:18443/`，在「设置」里填 TT_TOKEN 即可对话（首次打开会
+自动把 Base URL 设为同源地址）。
+
+GitHub Pages 版（`https://whypilotxia.github.io/ttswitch-ws-tunnel/`）保留作展示与下载入口，
+页面横幅会引导用户前往服务器在线版。
+
+浏览器限制与解法（仅 GitHub Pages 在线版需要关心）：
 
 1. **CORS**：`public_relay.py` 已对 API 响应附加 CORS 头并直接应答 OPTIONS 预检
    （`Allow-Origin: *`；令牌走 `Authorization` 头不依赖 Cookie，安全）。服务器更新后需重启
    `public_relay.py`。
-2. **混合内容**：GitHub Pages 是 HTTPS，浏览器禁止调用 `http://` 网关。**无域名解法**——
-   sslip.io 免费把 `118-31-105-6.sslip.io` 解析到 `118.31.105.6`（IP 嵌在域名里，无需购买），
-   用 Let's Encrypt 免费签证书。**Windows Server 用 win-acme**（certbot 官方已停发 Windows 安装包）：
-   ```powershell
-   # 管理员 PowerShell（临时停掉占用 80 端口的服务，验证完再启）
-   curl.exe -L -o win-acme.zip https://github.com/win-acme/win-acme/releases/download/v2.2.9.1701/win-acme.v2.2.9.1701.x64.trimmed.zip
-   Expand-Archive win-acme.zip -DestinationPath C:\win-acme
-   C:\win-acme\wacs.exe --source manual --host 118-31-105-6.sslip.io --validation selfhosting `
-     --store pemfiles --pemfilespath C:\ttswitch-ws-tunnel\certs `
-     --installation none --accepttos --emailaddress you@example.com
-   ```
-   完成后 `C:\ttswitch-ws-tunnel\certs\` 下生成 `*-crt.pem`（证书）、`*-key.pem`（私钥）、
-   `*-chain.pem`（证书+中间链）。在 `public_relay.py` 填写并重启：
+2. **混合内容**：GitHub Pages 是 HTTPS，浏览器禁止调用 `http://` 网关，在线直连必须给网关
+   配 HTTPS 证书。但 80 端口被备案拦截（HTTP-01 不可用）、sslip.io 加不了 TXT（DNS-01 不可
+   用），可行路径只剩：
+   - 买便宜域名（`.top` 等几元/年）托管到 DNSPod / 阿里云 DNS，用 acme.sh 的 DNS API 签发
+     （`acme.sh --issue --dns dns_dp` 或 `--dns dns_ali`），最稳妥；
+   - 尝试 acme.sh 的 TLS-ALPN-01（`acme.sh --issue --alpn`，需 443 端口放行且未被 SNI 拦截；
+     win-acme 不支持该验证方式）；
+   - 对域名完成 ICP 备案后 80/443 全开（周期最长）。
+
+   签发后在 `public_relay.py` 填写证书路径并重启，Mac 侧 `.env.txt` 加
+   `PUBLIC_TUNNEL_URL=wss://<域名>:18443/_tunnel` 并重启 `intranet_agent.py`：
    ```python
-   SSL_CERT_FILE = r"C:\ttswitch-ws-tunnel\certs\118-31-105-6.sslip.io-chain.pem"
-   SSL_KEY_FILE = r"C:\ttswitch-ws-tunnel\certs\118-31-105-6.sslip.io-key.pem"
+   SSL_CERT_FILE = r"C:\ttswitch-ws-tunnel\certs\<域名>-chain.pem"
+   SSL_KEY_FILE = r"C:\ttswitch-ws-tunnel\certs\<域名>-key.pem"
    ```
-   然后 Mac 侧 `.env.txt` 加一行 `PUBLIC_TUNNEL_URL=wss://118-31-105-6.sslip.io:18443/_tunnel`
-   并重启 `intranet_agent.py`；页面设置中 Base URL 改为
-   `https://118-31-105-6.sslip.io:18443/tencent/v1`。
-   win-acme 自动创建计划任务续期（证书 90 天有效）；由于 Python 进程启动时加载证书，
-   续期后需重启 `public_relay.py`（可加一个计划任务执行
-   `taskkill /F /IM python.exe & python public_relay.py` 或用 NSSM 注册为服务）。
-   若 sslip.io 撞上 Let's Encrypt 公共域名周限额（与全网用户共享 50 张/周，偶发），换 nip.io
-   域名（`118-31-105-6.nip.io`）重签，或给 wacs.exe 加 `--baseuri` 切 ZeroSSL。
 3. **零改动兜底**：页面横幅提供「下载本页」，本地双击打开（`file://` 不受混合内容限制，
    CORS `*` 覆盖 `Origin: null`），功能完全一致。

@@ -745,6 +745,43 @@ async def cors_options_middleware(request: web.Request, handler):
     return await handler(request)
 
 
+# ---------- 内置在线演示页（同源返回，无需证书） ----------
+# 阿里云对未备案域名/IP 的 80/443 有备案拦截（HTTP-01 验证 403），sslip.io 又加不了
+# TXT 记录（DNS-01 不可行）。因此把仓库 docs/index.html 直接挂在中继端口返回：
+# 页面与 API 同源同协议（同为 http://IP:18443），无混合内容、无 CORS 限制。
+PLAYGROUND_ROUTES = ("/", "/index.html", "/playground", "/playground/")
+
+
+def load_playground_html() -> bytes | None:
+    path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "docs", "index.html"
+    )
+    try:
+        with open(path, "rb") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+async def playground_handler(request: web.Request) -> web.StreamResponse:
+    html = load_playground_html()
+    if html is None:
+        return web.Response(
+            status=500,
+            text="未找到 docs/index.html：请在仓库根目录运行本脚本（git pull 后重启）。",
+        )
+    return web.Response(
+        body=html,
+        content_type="text/html",
+        charset="utf-8",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+async def favicon_handler(request: web.Request) -> web.Response:
+    return web.Response(status=204)
+
+
 def create_app() -> web.Application:
     validate_secret()
     app = web.Application(
@@ -753,6 +790,9 @@ def create_app() -> web.Application:
     app["relay_state"] = RelayState()
     app.router.add_route("*", TUNNEL_PATH, tunnel_handler)
     app.router.add_get("/__tunnel_health", health_handler)
+    for route in PLAYGROUND_ROUTES:
+        app.router.add_get(route, playground_handler)
+    app.router.add_get("/favicon.ico", favicon_handler)
     app.router.add_route("*", "/{path_info:.*}", proxy_handler)
     app.on_shutdown.append(shutdown_handler)
     return app
