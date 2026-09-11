@@ -147,7 +147,7 @@ http://118.31.105.6:18443/tencent/v1
 
 `docs/index.html` 是纯前端单页演示（仿 DeepSeek Harness 风格，零依赖、零构建）：
 
-- 模型选择（31 个内置清单，分组标「公费 / 内网·免费」，多模态带 📷）+ 推理等级
+- 模型选择（38 个内置清单，分组标「公费 / 内网·免费」，多模态带 📷）+ 推理等级
 - 流式对话（SSE），推理过程折叠展示；Markdown / 代码块渲染
 - 上传图片（多模态模型，OpenAI `image_url` 格式）、读取本地文本文件附加到消息
 - 设置抽屉配置 TT_TOKEN / Base URL / System Prompt / 上下文条数；令牌仅存浏览器 localStorage
